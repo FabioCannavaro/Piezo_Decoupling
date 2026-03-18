@@ -228,13 +228,13 @@ def main():
                     'class': cls,
                     'group': infer_group_name(csv_path)
                 })
-                print(f"✅ Saved {out_path} shape={arr.shape}")
+                print(f"Saved {out_path} shape={arr.shape}")
             except Exception as e:
-                print(f"❌ Error {csv_path}: {e}")
+                print(f"Error {csv_path}: {e}")
 
     with open(index_json_path, 'w') as f:
         json.dump(index, f, indent=2)
-    print(f"📄 Index written: {index_json_path} ({len(index)} samples)")
+    print(f"Index written: {index_json_path} ({len(index)} samples)")
 
 
 if __name__ == '__main__':
