@@ -64,7 +64,7 @@ def unfreeze_all_params(model, base_lr):
 
 def train_single_fold_baseline(model_name, root, test_json_path, epochs, batch_size, lr, seed, device):
     print(f"\n========================================================")
-    print(f"🚀 Training Baseline: {model_name}")
+    print(f"Training Baseline: {model_name}")
     print(f"========================================================")
     
     # Save directory
@@ -92,7 +92,7 @@ def train_single_fold_baseline(model_name, root, test_json_path, epochs, batch_s
             excluded_count += 1
             
     if excluded_count == 0:
-        print("⚠️ Warning: No files excluded. Check your JSON path matching.")
+        print("Warning: No files excluded. Check your JSON path matching.")
         
     print(f"   Original Total: {len(all_paths)} | Excluded Test: {excluded_count} | Training Pool: {len(train_candidate_indices)}")
     

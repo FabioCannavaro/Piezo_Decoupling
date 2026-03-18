@@ -8,7 +8,7 @@ from torch.utils.data import Dataset
 class SpectrogramDataset(Dataset):
     def __init__(self, image_dir, transform=None, stats=None, augment=False, index_json=None):
         self.root = image_dir
-        self.transform = transform  # (미사용) torchvision 변환 대신 z-score/증강 직접 수행
+        self.transform = transform  
         self.augment = augment
 
         self.image_paths = []
@@ -39,9 +39,7 @@ class SpectrogramDataset(Dataset):
 
         self.labels = torch.tensor(self.labels, dtype=torch.long)
 
-        # dataset-wide stats 계산 (stats가 주어지지 않았을 경우)
         if stats is None and len(self.image_paths) > 0:
-            # 첫 번째 파일에서 채널 수(C) 동적 확인
             first_arr = np.load(self.image_paths[0])
             C = first_arr.shape[0] if first_arr.ndim == 3 else 1
 
@@ -66,7 +64,6 @@ class SpectrogramDataset(Dataset):
         elif stats is not None:
             self.stats = stats
         else:
-            # Fallback for empty dataset
             self.stats = {'mean': [0.0], 'std': [1.0]}
 
         C = len(self.stats['mean'])
@@ -112,3 +109,51 @@ class SpectrogramDataset(Dataset):
             
         x = torch.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
         return x, self.labels[idx]
+
+# -------------------------------------------------------------
+# Strong SpecAugment 및 AugmentWrapper
+# -------------------------------------------------------------
+
+def _strong_spec_mask(x: torch.Tensor, time_frac=(0.08, 0.25), freq_frac=(0.08, 0.25), p=0.8):
+    if np.random.rand() > p:
+        return x
+    _, H, W = x.shape
+    if np.random.rand() < 0.8:
+        w = int(np.random.uniform(time_frac[0], time_frac[1]) * W)
+        w = max(1, min(W, w))
+        t0 = np.random.randint(0, max(1, W - w + 1))
+        x[:, :, t0:t0+w] = 0
+    if np.random.rand() < 0.8:
+        h = int(np.random.uniform(freq_frac[0], freq_frac[1]) * H)
+        h = max(1, min(H, h))
+        f0 = np.random.randint(0, max(1, H - h + 1))
+        x[:, f0:f0+h, :] = 0
+    if np.random.rand() < 0.4:
+        g = 1.0 + np.random.uniform(-0.12, 0.12)
+        x = x * g
+    return x
+
+class AugmentWrapper(Dataset):
+    def __init__(self, base_ds, noise_std=0.0, strong_specaugment=False):
+        object.__setattr__(self, "base", base_ds)
+        self.noise_std = float(noise_std)
+        self.strong_specaugment = bool(strong_specaugment)
+
+        self.labels = getattr(base_ds, "labels", None)
+        self.image_paths = getattr(base_ds, "image_paths", None)
+        self.groups = getattr(base_ds, "groups", None)
+        self.class_to_idx = getattr(base_ds, "class_to_idx", None)
+        self.root = getattr(base_ds, "root", None)
+        self.stats = getattr(base_ds, "stats", None)
+
+    def __len__(self):
+        return len(self.base)
+
+    def __getitem__(self, idx):
+        x, y = self.base[idx]
+        if self.strong_specaugment:
+            x = _strong_spec_mask(x)
+        if self.noise_std > 0:
+            x = x + torch.randn_like(x) * self.noise_std
+        x = torch.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
+        return x, y
