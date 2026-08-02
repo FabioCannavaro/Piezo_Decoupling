@@ -25,7 +25,32 @@ from spectrogram_dataset import SpectrogramDataset, AugmentWrapper
 def nowstamp():
     return datetime.now().strftime("%Y%m%d_%H%M%S")
 
+# --------------------- aug provenance lookup ---------------------
+# Augmented npy files produced via raw_augment_csv.py keep natural, sequential
+# filenames (no "__aug" marker), so origin (real vs synthetic) can't be told
+# from the filename alone. We instead consult augmentation_log.csv, which is
+# copied into the npy dataset root alongside index.json. Falls back to the
+# old "__aug" filename check for older datasets that don't have the log.
+_AUG_LOOKUP: dict = {}
+
+def load_aug_log(root: str) -> dict:
+    log_path = os.path.join(root, "augmentation_log.csv")
+    lookup = {}
+    if os.path.exists(log_path):
+        with open(log_path, "r", newline="") as f:
+            for row in csv.DictReader(f):
+                key = f"{row['class']}/{os.path.splitext(row['filename'])[0]}.npy"
+                lookup[key] = (row["is_aug"] == "1")
+        print(f"📄 Loaded augmentation log ({len(lookup)} entries) from {log_path}")
+    else:
+        print(f"[INFO] No augmentation_log.csv found at {root}; "
+              f"falling back to '__aug' filename pattern for aug detection.")
+    return lookup
+
 def _is_aug_path(p: str) -> bool:
+    key = "/".join(os.path.normpath(p).split(os.sep)[-2:])
+    if key in _AUG_LOOKUP:
+        return _AUG_LOOKUP[key]
     return "__aug" in os.path.basename(p)
 
 @torch.no_grad()
@@ -300,6 +325,9 @@ def train_kfold(root: str, batch_size: int, epochs: int, lr: float, freeze_epoch
     np.random.seed(seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     torch.backends.cudnn.benchmark = True
+
+    global _AUG_LOOKUP
+    _AUG_LOOKUP = load_aug_log(root)
 
     ds_full = SpectrogramDataset(root, augment=False, stats=None, index_json=None)
     all_paths = ds_full.image_paths
