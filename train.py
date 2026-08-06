@@ -165,8 +165,11 @@ def make_subset_from_indices(root, base_stats, indices, augment=False,
 # --------------------- model ---------------------
 
 def build_model(num_classes: int, in_chans: int = 3, head_dropout: float = 0.3):
+    model_name = "convnextv2_tiny.fcmae"
+    print(f"Using model: {model_name}")
+    
     model = timm.create_model(
-        "convnextv2_tiny.fcmae",
+        model_name,
         pretrained=True,
         num_classes=0,
         in_chans=in_chans,
@@ -235,39 +238,73 @@ def unfreeze_backbone_and_reset_opt(model, current_epoch, epochs, base_lr, weigh
 
 # --------------------- loops ---------------------
 
-def epoch_loop(model, loader, criterion, device,
-               train_mode=True, optimizer=None, max_grad=5.0,
-               use_mixup=True, mixup_alpha=0.4):
+def epoch_loop(
+    model,
+    loader,
+    criterion,
+    device,
+    train_mode=True,
+    optimizer=None,
+    max_grad=5.0,
+    use_mixup=True,
+    mixup_alpha=0.4,
+    scaler=None,
+    use_amp=True,
+):
+    """Run one training or validation epoch with optional CUDA AMP."""
     model.train(mode=train_mode)
     total_loss, acc_sum, total_seen = 0.0, 0.0, 0
+    amp_enabled = bool(use_amp and device.type == "cuda")
 
     for x, y in loader:
-        x = torch.nan_to_num(x.to(device, non_blocking=True), nan=0.0, posinf=0.0, neginf=0.0)
+        x = torch.nan_to_num(
+            x.to(device, non_blocking=True),
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        )
         y = y.to(device, non_blocking=True)
 
         if train_mode:
+            if optimizer is None:
+                raise ValueError("optimizer is required when train_mode=True")
             optimizer.zero_grad(set_to_none=True)
 
         with torch.set_grad_enabled(train_mode):
-            if train_mode and use_mixup and mixup_alpha > 0:
-                x, y_a, y_b, lam = mixup_batch(x, y, alpha=mixup_alpha)
-                logits = model(x)
-                loss = mixup_loss(criterion, logits, y_a, y_b, lam)
-                pred = logits.argmax(dim=1)
-                batch_acc = mixup_expected_acc(pred, y_a, y_b, lam)
-            else:
-                logits = model(x)
-                loss = criterion(logits, y)
-                pred = logits.argmax(dim=1)
-                batch_acc = float((pred == y).float().mean().item())
+            with torch.amp.autocast(
+                device_type="cuda",
+                dtype=torch.float16,
+                enabled=amp_enabled,
+            ):
+                if train_mode and use_mixup and mixup_alpha > 0:
+                    x, y_a, y_b, lam = mixup_batch(x, y, alpha=mixup_alpha)
+                    logits = model(x)
+                    loss = mixup_loss(criterion, logits, y_a, y_b, lam)
+                    pred = logits.argmax(dim=1)
+                    batch_acc = mixup_expected_acc(pred, y_a, y_b, lam)
+                else:
+                    logits = model(x)
+                    loss = criterion(logits, y)
+                    pred = logits.argmax(dim=1)
+                    batch_acc = float((pred == y).float().mean().item())
 
             if train_mode:
-                loss.backward()
-                for p in model.parameters():
-                    if p.grad is not None:
-                        torch.nan_to_num_(p.grad, nan=0.0, posinf=1.0, neginf=-1.0)
-                        p.grad.clamp_(-max_grad, max_grad)
-                optimizer.step()
+                if scaler is not None and scaler.is_enabled():
+                    scaler.scale(loss).backward()
+                    scaler.unscale_(optimizer)
+                    for p in model.parameters():
+                        if p.grad is not None:
+                            torch.nan_to_num_(p.grad, nan=0.0, posinf=1.0, neginf=-1.0)
+                            p.grad.clamp_(-max_grad, max_grad)
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    loss.backward()
+                    for p in model.parameters():
+                        if p.grad is not None:
+                            torch.nan_to_num_(p.grad, nan=0.0, posinf=1.0, neginf=-1.0)
+                            p.grad.clamp_(-max_grad, max_grad)
+                    optimizer.step()
 
         bs = y.size(0)
         total_loss += float(loss.item()) * bs

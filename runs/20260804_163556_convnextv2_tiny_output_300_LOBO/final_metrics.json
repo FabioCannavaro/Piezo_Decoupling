@@ -1,0 +1,10 @@
+{
+  "n_unique_test_predictions": 2400,
+  "expected_n_unique_test_predictions": 2400,
+  "aggregate_accuracy": 0.7970833333333334,
+  "aggregate_macro_f1": 0.7962000486044625,
+  "fold_accuracy_mean": 0.7970833333333334,
+  "fold_accuracy_sd": 0.019797148363674362,
+  "fold_macro_f1_mean": 0.7959948975891418,
+  "fold_macro_f1_sd": 0.01987768855494119
+}

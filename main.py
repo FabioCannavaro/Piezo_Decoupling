@@ -199,7 +199,7 @@ def infer_group_name(csv_path: str) -> str:
 
 def main():
     parser = argparse.ArgumentParser(description="Generate Spectrograms from Sensor CSV Data")
-    parser.add_argument('--input_dir', type=str, default='data_study', help='Path to raw data directory')
+    parser.add_argument('--input_dir', type=str, default='data', help='Path to raw data directory')
     parser.add_argument('--output_dir', type=str, required=True, help='Path to save processed .npy files')
     parser.add_argument('--include_temp', action='store_true', help='Include temperature data (generates 3-channel instead of 2-channel)')
     args = parser.parse_args()

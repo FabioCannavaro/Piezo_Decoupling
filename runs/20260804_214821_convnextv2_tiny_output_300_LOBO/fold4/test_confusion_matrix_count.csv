@@ -1,0 +1,9 @@
+,clipper,earbud,eraser,finger,hotpeltier,peltier,pen,sponge
+clipper,21,1,1,7,0,0,0,0
+earbud,0,18,9,0,0,0,2,1
+eraser,0,3,22,0,0,1,4,0
+finger,0,0,0,29,1,0,0,0
+hotpeltier,1,0,0,0,25,0,0,4
+peltier,0,0,0,0,3,27,0,0
+pen,0,1,2,0,0,0,27,0
+sponge,2,1,0,0,0,0,1,26
