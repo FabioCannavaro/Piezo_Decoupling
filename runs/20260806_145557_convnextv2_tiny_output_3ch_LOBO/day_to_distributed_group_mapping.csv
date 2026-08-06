@@ -1,0 +1,11 @@
+actual_day,assigned_group,expected_samples_per_class,filename_pattern
+1,1,30,Day01_D*_T*.npy
+2,2,30,Day02_D*_T*.npy
+3,3,30,Day03_D*_T*.npy
+4,4,30,Day04_D*_T*.npy
+5,5,30,Day05_D*_T*.npy
+6,6,30,Day06_D*_T*.npy
+7,7,30,Day07_D*_T*.npy
+8,8,30,Day08_D*_T*.npy
+9,9,30,Day09_D*_T*.npy
+10,10,30,Day10_D*_T*.npy

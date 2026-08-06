@@ -1,0 +1,88 @@
+{
+  "root": "output_3ch",
+  "mode": "ten-fold leave-one-day-out cross-validation",
+  "actual_days": 10,
+  "samples_per_day_per_class": 30,
+  "days_per_block": 1,
+  "blocks": 10,
+  "validation_rule": "next independent measurement day",
+  "include_synthetic_training_only": false,
+  "num_classes": 8,
+  "seed": 42,
+  "device": "cuda:0",
+  "folds_to_run": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "test_fold_groups": {
+    "1": [
+      1
+    ],
+    "2": [
+      2
+    ],
+    "3": [
+      3
+    ],
+    "4": [
+      4
+    ],
+    "5": [
+      5
+    ],
+    "6": [
+      6
+    ],
+    "7": [
+      7
+    ],
+    "8": [
+      8
+    ],
+    "9": [
+      9
+    ],
+    "10": [
+      10
+    ]
+  },
+  "validation_group_by_fold": {
+    "1": 2,
+    "2": 3,
+    "3": 4,
+    "4": 5,
+    "5": 6,
+    "6": 7,
+    "7": 8,
+    "8": 9,
+    "9": 10,
+    "10": 1
+  },
+  "training": {
+    "batch_size": 64,
+    "epochs": 200,
+    "lr": 3e-05,
+    "freeze_epochs": 5,
+    "head_dropout": 0.3,
+    "noise_std": 0.03,
+    "strong_specaugment": true,
+    "mixup_alpha": 0.4,
+    "use_mixup": true,
+    "label_smoothing": 0.05,
+    "weight_decay": 0.0001,
+    "gradient_value_clip": 5.0,
+    "mixed_precision": "AMP FP16",
+    "tf32": true,
+    "num_workers": 8,
+    "persistent_workers": true,
+    "prefetch_factor": 4
+  }
+}
