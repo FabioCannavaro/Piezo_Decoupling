@@ -1,133 +1,85 @@
-# Piezo Paper Classification Pipeline — Clean Version
+# Piezo Decoupling: analysis code
 
-This folder keeps only the current paper-reproduction pipeline.
+This repository contains the classification, external evaluation, benchmarking, and real-time Python code. Experimental data are archived separately. Place the dataset under `data/` in the repository root. Add the dataset DOI and the software release DOI here when assigned.
 
-## Files
-
-### `main_paper_reproduction.py`
-Raw CSV -> filtered Morse CWT spectrogram -> `.npy`
-
-- target sampling rate: 50 Hz
-- strain band-pass: 0.1–15 Hz
-- temperature low-pass: 1 Hz
-- CWT output: 96 frequency bins × 256 time bins
-- default: 2 channels (strain X, strain Y)
-- `--include_temp`: 3 channels (strain X, strain Y, temperature)
-
-Example:
-
-```bash
-python main_paper_reproduction.py \
-    --input_dir data300 \
-    --output_dir output_300 \
-    --include_temp
-```
-
----
-
-### `spectrogram_dataset.py`
-PyTorch dataset + normalization + augmentation.
-
-Training behavior is preserved:
-
-1. Z-score normalization using fold-specific training statistics
-2. built-in lightweight time/frequency masking when `augment=True`
-3. optional strong SpecAugment
-4. optional Gaussian noise
-
----
-
-### `train.py`
-Shared functions used by `train_paper_10fold.py` only.
-
-Contains:
-
-- training-only normalization statistics
-- dataset subset construction
-- ConvNeXtV2-Tiny model
-- MixUp
-- AdamW + warmup/cosine scheduler
-- backbone freeze/unfreeze
-- AMP training loop
-- training curve plotting
-
-The old random StratifiedKFold + fixed holdout training code was removed.
-
----
-
-### `train_paper_10fold.py`
-Current paper-matched day-based 10-fold training/evaluation runner.
-
-Default split for 10 measurement days:
-
-- Fold 1: test Day 1, validation Day 2, train Day 3–10
-- Fold 2: test Day 2, validation Day 3, train remaining days
-- ...
-- Fold 10: test Day 10, validation Day 1, train remaining days
-
-Default paper training settings are unchanged:
-
-- ConvNeXtV2 Tiny (`convnextv2_tiny.fcmae`)
-- epochs: 200
-- batch size: 16
-- learning rate: 3e-5
-- head dropout: 0.3
-- noise std: 0.03
-- strong SpecAugment: ON
-- MixUp: ON, alpha 0.4
-- label smoothing: 0.05
-- WeightedRandomSampler
-- AMP FP16
-- TF32
-
-Full 10-fold:
-
-```bash
-python train_paper_10fold.py --root output_300
-```
-
-Pilot Fold 1 only:
-
-```bash
-python train_paper_10fold.py --root output_300 --folds 1
-```
-
-Evaluate existing checkpoints only:
-
-```bash
-python train_paper_10fold.py \
-    --root output_300 \
-    --out_root runs/YOUR_EXISTING_RUN \
-    --eval_only
-```
-
-## Recommended workflow
+## Dataset layout
 
 ```text
-Raw CSV
-   ↓
-main_paper_reproduction.py
-   ↓
-.npy CWT spectrograms
-   ↓
-spectrogram_dataset.py
-   ↓
-train.py (shared model/training functions)
-   ↓
-train_paper_10fold.py
-   ↓
-fold checkpoints + confusion matrices + metrics
+data/
+  raw/                    # raw measurements by class
+  MOTORIZED/              # motorized measurements
+  odd/                    # contact-position measurements
+  processed_centered_3ch/ # three-channel CWT .npy inputs
+  processed_center_2ch/   # two-channel CWT .npy inputs
+  processed_1ch/          # one-channel CWT .npy inputs
+  processed_MOT/          # motorized processed .npy inputs
 ```
 
-## What was removed
+Keep the original class folders and filenames. `src/dataset.py` loads `index.json` when present, or scans class directories and infers a group from each filename prefix. Each processed sample has shape `(channels, 96, 256)`. The code below consumes the processed arrays directly; do not remove them from the archived dataset until raw-to-processed reproduction has been verified.
 
-From the old `train.py`:
+## Install and run
 
-- random `StratifiedKFold` training entry point
-- random fixed holdout-test construction
-- old augmentation provenance helpers used only by that pipeline
-- duplicate strong SpecAugment definition
-- unused validation-confusion helper
-- old CLI / `__main__` training runner
+Use Python 3.10+ and install a CUDA-enabled PyTorch build suitable for your system. Then install the direct Python dependencies listed in `requirements.txt`. Package versions are not pinned to the original experimental environment. Run these commands from the repository root.
 
-These were not used by the current paper-matched day-based 10-fold script.
+```bash
+python -m pip install -r requirements.txt
+```
+
+## Preprocess raw CSV files
+
+`scripts/preprocess_raw.py` converts the raw CSV measurements into CWT tensors with shape `(channels, 96, 256)` and writes an `index.json` file. It detects `25X` and `25Y` as the two strain channels and `25W` as the temperature channel. The strain channels are median-centered and band-pass filtered before the Morse CWT; the temperature channel is low-pass filtered without median centering.
+
+Generate the three-channel inputs used for the main classification analysis:
+
+```bash
+python -m scripts.preprocess_raw \
+  --input_dir data/raw \
+  --output_dir data/processed_centered_3ch \
+  --include_temp
+```
+
+Generate the two-channel strain-only inputs:
+
+```bash
+python -m scripts.preprocess_raw \
+  --input_dir data/raw \
+  --output_dir data/processed_center_2ch
+```
+
+Generate the one-channel ablation inputs using the first strain channel:
+
+```bash
+python -m scripts.preprocess_raw_1ch \
+  --input_dir data/raw \
+  --output_dir data/processed_1ch
+```
+
+The processed motorized and contact-position test inputs used for the reported analyses are included in the archived dataset. Until exact raw-to-processed equivalence has been verified for every analysis branch, use the archived processed arrays to reproduce the reported results.
+
+## Train and evaluate
+
+```bash
+python -m scripts.train_10fold --root data/processed_centered_3ch --no_strong_specaug --no_mixup
+python -m scripts.train_10fold --root data/processed_center_2ch --no_strong_specaug --no_mixup
+python -m scripts.train_10fold --root data/processed_1ch --no_strong_specaug --no_mixup
+```
+
+`scripts/train_10fold.py` holds out one measurement day for testing and the next day for validation. The defaults enable strong SpecAugment and MixUp; the commands above disable both as in the later experiments. Verify which run and flags produced each result in the final manuscript. For a single fold add `--folds 1`; to reevaluate saved checkpoints use `--out_root PATH_TO_RUN --eval_only`. Training requires CUDA.
+
+```bash
+python -m scripts.train_data_fraction --root data/processed_centered_3ch --no_strong_specaug --no_mixup
+python -m scripts.test_motorized --motor_root data/processed_MOT --run_dir PATH_TO_RUN
+python -m scripts.benchmark_model --root data/processed_centered_3ch --run_dir PATH_TO_RUN --fold 1
+```
+
+`PATH_TO_RUN` is a training output directory containing `foldN/best_model.pth`. Checkpoints are not included in this repository. The position test expects processed `<class>/<position>/*.npy` under `--ood_root`. If `data/odd` holds raw CSVs, preprocess and validate them before running:
+
+```bash
+python -m scripts.ood_test_final --ood_root PATH_TO_PROCESSED_POSITION_DATA --run_dir PATH_TO_RUN --train_root data/processed_centered_3ch
+```
+
+`real_time/main.py` provides a CSV-to-CWT utility for the real-time demonstration. For the paper data pipeline, use `scripts/preprocess_raw.py`. `real_time/realtime_server.py` needs a compatible trained checkpoint. Firmware and Android app source are not included here.
+
+## Archiving
+
+Before making a GitHub Release for Zenodo, verify the paper's reported results against saved run outputs and record the corresponding tag, run settings, and data DOI. Archive raw and processed inputs together unless you have verified exact regeneration; include a dataset README specifying formats, units, filenames, and the relationship of each folder to the figures and tables.
