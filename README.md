@@ -1,6 +1,6 @@
-# Piezo Decoupling: analysis code
+# Hardware-encoded modality separation: analysis code
 
-This repository contains the classification, external evaluation, benchmarking, and real-time Python code. Experimental data are archived separately. Place the dataset under `data/` in the repository root. Add the dataset DOI and the software release DOI here when assigned.
+This repository contains the classification, external evaluation, benchmarking, and real-time Python code associated with the article **“Hardware-encoded modality separation for multimodal sensing and artificial perception.”** Experimental data are archived on Zenodo at **[10.5281/zenodo.22972999](https://doi.org/10.5281/zenodo.22972999)**. Place the downloaded dataset under `data/` in the repository root. A software release DOI will be added when assigned.
 
 ## Dataset layout
 
